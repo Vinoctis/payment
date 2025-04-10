@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package payment;
+option go_package = "payment/api/proto;proto";
+
+service PaymentService {
+    rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse) {}
+    rpc HandleNotify(NotifyRequest) returns (NotifyResponse) {}
+}
+
+message CreateOrderRequest {
+    int64 user_id = 1;
+    string payway = 2;
+    int64 amount  = 3;
+}
+
+message CreateOrderResponse {
+    string order_no = 1;
+    int32 status = 2;
+}
+
+message NotifyRequest {
+  string order_no = 1;
+  bytes data = 2;
+}
+
+message NotifyResponse {
+  string order_no = 1;
+  int32 status = 2;
+}
