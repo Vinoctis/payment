@@ -20,11 +20,15 @@ services:
     ports:
       - 2379:2379
       - 2380:2380
-    test: ["CMD", "etcdctl", "--endpoints=http://localhost:2379",  "endpoint", "health"]
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://etcd-node1:2379",  "endpoint", "health"]
       interval: 30s
       timeout: 10s
       retries: 3
   etcd-node2:
+    depends_on:
+      etcd-node1:
+        condition: service_healthy
     image: bitnami/etcd:latest
     container_name: etcd-node2
     environment:
@@ -42,6 +46,9 @@ services:
     volumes:
       - /Users/vinoctis/Work/docker-data/etcd/node2:/etcd-data
   etcd-node3:
+    depends_on:
+      etcd-node1:
+        condition: service_healthy
     image: bitnami/etcd:latest
     container_name: etcd-node3
     environment:
@@ -55,25 +62,36 @@ services:
       - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
       - ETCD_INITIAL_CLUSTER=node1=http://etcd-node1:2380,node2=http://etcd-node2:2380,node3=http://etcd-node3:2380
     networks:
-      - payment
+      - payment-net
     volumes:
        - /Users/vinoctis/Work/docker-data/etcd/node3:/etcd-data
   mysql:
     image: arm64v8/mysql:8.0 
     container_name: mysql8
+    env_file:
+      - ./payment/.env
     environment:
-      MYSQL_USER: root
-      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${$MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
     ports:
-      - 33060:3306
+      - 33060:${MYSQL_PORT}
     volumes:
       - /Users/vinoctis/Work/docker-data/mysql/:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-uroot", "-p$$$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 500M
     networks:
       - payment-net
   payment:
