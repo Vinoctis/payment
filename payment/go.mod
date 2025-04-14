@@ -4,10 +4,7 @@ go 1.23.0
 
 toolchain go1.23.8
 
-replace etcd-register-center v0.0.0 => ../etcd-register-center
-
 require (
-	etcd-register-center v0.0.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/joho/godotenv v1.5.1
 	google.golang.org/grpc v1.71.0
@@ -19,6 +16,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/Vinoctis/etcd-register-center v1.0.2 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect

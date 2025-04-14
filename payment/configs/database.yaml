@@ -1,11 +1,4 @@
-mysql:
-  payment: 
-    dsn: "%s:%s@tcp(%s:%s)/%s?timeout=3s&charset=utf8mb4&parseTime=true&loc=Local&net=timeoutDialer"
-    host: 127.0.0.1
-    user: root
-    password: "123456"
-    dbname: payment
-    port: 33060
-redis: 
-  addr: "127.0.0.1"
-  port: "63790"
+databases:
+  payment:
+    driver: mysql
+    dsn: "%s:%s@tcp(%s:%s)/%s?timeout=3s&charset=utf8mb4&parseTime=true&loc=Local"

@@ -1,0 +1,7 @@
+etcd-nodes:
+  etcd-node1:
+    addr: etcd-node1
+    port: 2379
+  etcd-node2:
+    addr: etcd-node2
+    port: 2379

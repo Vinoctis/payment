@@ -1,9 +1,6 @@
 package main 
 
 import (
-	DB "payment/internal/repository"
-	mysql "payment/internal/repository/mysql"
-	"gorm.io/gorm"
     "payment/internal"
 	"os/signal"
 	"log"
@@ -11,27 +8,38 @@ import (
 	"os"
 	"syscall"
 	"time"
+	"payment/pkg/config"
 )
 
-var (
-	DBCfg *DB.DatabaseConfig
-	dbPayment *gorm.DB
-)
+// var dbPayment *gorm.DB
+var cfgManager *config.Manager
 
 func init() {
-	DBCfg,err := DB.LoadConfig()
-	if err != nil {
-		panic(err)
-	}
-	//初始化数据库
-	dbPayment , err = mysql.Init(DBCfg.DBPayment.MySqlDB)
-	if err != nil {
+	cfgManager = config.NewManager()
+	//加载配置
+	cfgManager.RegisterLoader(&config.EnvLoader{
+		Envfile: ".env",
+	})
+	//数据库
+	cfgManager.RegisterLoader(&config.YmalLoader{
+		Path : "configs/database.yaml",
+	})
+	//注册中心
+	cfgManager.RegisterLoader(&config.YmalLoader{
+		Path : "configs/registry.yaml",
+	})
+	//服务
+	cfgManager.RegisterLoader(&config.YmalLoader{
+		Path : "configs/service.yaml",
+	})
+
+	if err := cfgManager.Load();err!= nil {
 		panic(err)
 	}
 }
 
 func main() {
-	App, err := internal.NewApplication(dbPayment)
+	App, err := internal.NewApplication(cfgManager.Configs)
 	if err != nil {
 		panic(err)
 	}

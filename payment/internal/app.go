@@ -2,7 +2,7 @@ package internal
 
 import (
 	"context"
-	etcd "etcd-register-center/sdk"
+	etcd "github.com/Vinoctis/etcd-register-center/sdk"
 	"fmt"
 	grpcHandler "payment/internal/handler/grpc"
 	"payment/internal/handler/http/controller"
@@ -13,10 +13,13 @@ import (
 	"payment/internal/transport/http"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"payment/pkg/config"
+	mysql "payment/internal/repository/mysql"
 )
 
 type Application struct {
-	DB *gorm.DB
+	config *config.Config
+	databases *DBConnections
 	providers *Providers 
 	repositories *Repositories 
 	services *Services
@@ -24,7 +27,10 @@ type Application struct {
 	Server *Servers
 	router *gin.Engine 
 	registry *Registry
-	etcdServiceInfo *EtcdServiceInfo
+}
+
+type DBConnections struct {
+	Payment *gorm.DB
 }
 
 
@@ -49,21 +55,17 @@ type Servers struct {
 	GRPC *grpc.Server
 }
 
-type EtcdServiceInfo struct {
-	Name string
-	Addr string
-}
-
 type Registry struct {
 	EtcdClient *etcd.Registry
-	ServiceInfo map[string]*EtcdServiceInfo 
+	ServiceInfo map[string]*config.ServiceConfig
 }
 
 
 
-func NewApplication(db *gorm.DB) (*Application, error) {
+func NewApplication(cfg *config.Config) (*Application, error) {
 	app := &Application{
-		DB: db,
+		config: cfg,
+		databases: &DBConnections{},
 	}
 	if err := app.InitComponents();err != nil {
 		return nil , err
@@ -73,6 +75,10 @@ func NewApplication(db *gorm.DB) (*Application, error) {
 
 // 依赖注入管理
 func (app *Application) InitComponents() error {
+
+	if err := app.InitDatabases();err!= nil {
+		return fmt.Errorf("数据库初始化失败")
+	}
 
 	if err := app.InitProviders();err!= nil {
 		return fmt.Errorf("提供者初始化失败")
@@ -99,6 +105,15 @@ func (app *Application) InitComponents() error {
 	return nil
 }
 
+func (app *Application) InitDatabases() error {
+		var err error
+		app.databases.Payment ,err = mysql.Init(app.config.DB["payment"])
+		if err!= nil {
+			return fmt.Errorf("数据库初始化失败")
+		}
+		return nil
+}
+
 func (app *Application) InitProviders() error {
 	app.providers = &Providers{
 		Payment: map[string]service.PaymentProvider{
@@ -111,7 +126,7 @@ func (app *Application) InitProviders() error {
 
 func (app *Application) InitRepositories() error {
 	app.repositories = &Repositories{
-		Payment: repository.NewPaymentRepository(app.DB),
+		Payment: repository.NewPaymentRepository(app.databases.Payment),
 	}
 
 	if app.repositories == nil {
@@ -147,44 +162,41 @@ func (app *Application) InitRouter() error {
 }
 
 func (app *Application) InitServer() error {
+	httpAddr := fmt.Sprintf("%s:%s",
+		app.config.Service["http"].Addr, app.config.Service["http"].Port)
+	grpcAddr := fmt.Sprintf("%s:%s",
+		app.config.Service["grpc"].Addr, app.config.Service["grpc"].Port)
+
 	handler := grpcHandler.NewPaymentHanlder(app.services.Payment)
 	app.Server = &Servers{
-		HTTP: http.NewServer(":8080", app.router),
-		GRPC: grpc.NewServer(":9090", handler),
+		HTTP: http.NewServer(httpAddr, app.router),
+		GRPC: grpc.NewServer(grpcAddr, handler),
 	}
 	return nil
 }
 
 func (app *Application) RegisterService() error {
+	etcdCfg := app.config.Registry
 	//注册服务
 	endPoints := []string{
-		"localhost:2379",
+		fmt.Sprintf("%s:%s", etcdCfg["etcd-node1"].Addr, etcdCfg["etcd-node1"].Port),
 	} 
 	client,err := etcd.NewEtcdClient(endPoints)
 	if err!= nil {
 		return fmt.Errorf("etcd client error: %v", err) 
 	}
 
-	info := make(map[string]*EtcdServiceInfo)
-	info["HTTP"] = &EtcdServiceInfo{
-		Name: "payment-http",
-		Addr: "localhost:8080",
-	}
-	info["GRPC"] = &EtcdServiceInfo{
-		Name: "payment-grpc",
-		Addr: "localhost:9090",
-	}
-
 	app.registry = &Registry{
 		EtcdClient: etcd.NewRegistry(client),
-		ServiceInfo : info,
+		ServiceInfo : app.config.Service,
 	}
 	
 	for serviceType, info := range app.registry.ServiceInfo {
-		if err := app.registry.EtcdClient.Register(info.Name,info.Addr,5);err != nil {
+		serviceAddr := fmt.Sprintf("%s:%s", info.Addr, info.Port)
+		if err := app.registry.EtcdClient.Register(info.Name,serviceAddr,5);err != nil {
 			return fmt.Errorf("%v服务注册失败：%v", serviceType, err)
 		}
-		fmt.Printf("[%v]服务%v已注册，地址：%v\n", serviceType, info.Name, info.Addr)
+		fmt.Printf("[%v]服务%v已注册，地址：%v\n", serviceType, info.Name, serviceAddr)
 	}
 
 	return nil
@@ -193,7 +205,8 @@ func (app *Application) RegisterService() error {
 func (app *Application) DeregisterService() error {
 	if app.registry != nil && app.registry.ServiceInfo != nil  {
 		for serviceType, info := range app.registry.ServiceInfo {
-			app.registry.EtcdClient.Deregister(info.Name, info.Addr)
+			serviceAddr := fmt.Sprintf("%s:%s", info.Addr, info.Port)
+			app.registry.EtcdClient.Deregister(info.Name, serviceAddr)
 			fmt.Printf("[%v]服务已注销：%v\n", serviceType, info.Name)			
 		}
 		return nil
@@ -217,7 +230,7 @@ func (app *Application) Shutdown(ctx context.Context) error {
 	}
 
 	//关闭数据库链接
-	sqlDB, err := app.DB.DB()
+	sqlDB, err := app.databases.Payment.DB()
 	if err != nil {
 		return err 
 	}

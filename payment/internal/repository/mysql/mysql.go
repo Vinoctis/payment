@@ -7,22 +7,9 @@ import (
 	"time"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	mysqlDriver "github.com/go-sql-driver/mysql"
-	"net"
+	"payment/pkg/config"
+	"os"
 )
-
-type MySqlDB struct {
-	DSN string `yaml:"dsn"`
-	Host string `yaml:"host"`
-	DBName string `yaml:"dbname"`
-	User string `yaml:"user"`
-	Password string `yaml:"password"`
-	Port string `yaml:"port"`
-}
-
-type PaymentDB struct {
-	*MySqlDB `yaml:"payment"` 	
-}
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -32,16 +19,15 @@ func AutoMigrate(db *gorm.DB) error {
 	)
 }
 
-func Init(cfg *MySqlDB) (*gorm.DB, error) {
-	// 注册自定义 Dialer，添加底层 TCP 连接超时
-	mysqlDriver.RegisterDialContext("timeoutDialer", func(ctx context.Context, addr string) (net.Conn, error) {
-		dialer := &net.Dialer{
-			Timeout: 3 * time.Second,
-		}
-		return dialer.DialContext(ctx, "tcp", addr)
-	})
+func Init(cfg *config.DBConfig) (*gorm.DB, error) {
 	
-	dsn := fmt.Sprintf(cfg.DSN, cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
+	dsn := fmt.Sprintf(cfg.DSN, 
+		  os.Getenv("MYSQL_USER"), 
+	      os.Getenv("MYSQL_PASSWORD"),
+		  os.Getenv("MYSQL_HOST"),
+		  os.Getenv("MYSQL_PORT"),
+		  os.Getenv("MYSQL_DATABASE"))
+
 	//初始化数据库
 	db , err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
