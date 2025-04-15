@@ -22,12 +22,11 @@ func AutoMigrate(db *gorm.DB) error {
 func Init(cfg *config.DBConfig) (*gorm.DB, error) {
 	
 	dsn := fmt.Sprintf(cfg.DSN, 
-		  os.Getenv("MYSQL_USER"), 
-	      os.Getenv("MYSQL_PASSWORD"),
-		  os.Getenv("MYSQL_HOST"),
-		  os.Getenv("MYSQL_PORT"),
-		  os.Getenv("MYSQL_DATABASE"))
-
+		  os.Getenv("PAYMENT_USER"), 
+	      os.Getenv("PAYMENT_PASSWORD"),
+		  os.Getenv("PAYMENT_HOST"),
+		  os.Getenv("PAYMENT_PORT"),
+		  os.Getenv("PAYMENT_DATABASE"))
 	//初始化数据库
 	db , err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {

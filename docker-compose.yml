@@ -3,6 +3,11 @@ services:
   etcd-node1:
     image: bitnami/etcd:latest
     container_name: etcd-node1
+    depends_on:
+      etcd-node2:
+        condition: service_started
+      etcd-node3:
+        condition: service_started
     environment:
       - ALLOW_NONE_AUTHENTICATION=yes
       - ETCD_NAME=node1
@@ -21,14 +26,12 @@ services:
       - 2379:2379
       - 2380:2380
     healthcheck:
-      test: ["CMD", "etcdctl", "--endpoints=http://etcd-node1:2379",  "endpoint", "health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "ETCDCTL_API=3 etcdctl --endpoints=http://localhost:2379 endpoint health || exit 1"]
+      interval: 10s
+      timeout: 5s
       retries: 3
+      start_period: 20s
   etcd-node2:
-    depends_on:
-      etcd-node1:
-        condition: service_healthy
     image: bitnami/etcd:latest
     container_name: etcd-node2
     environment:
@@ -46,9 +49,6 @@ services:
     volumes:
       - /Users/vinoctis/Work/docker-data/etcd/node2:/etcd-data
   etcd-node3:
-    depends_on:
-      etcd-node1:
-        condition: service_healthy
     image: bitnami/etcd:latest
     container_name: etcd-node3
     environment:
@@ -66,24 +66,23 @@ services:
     volumes:
        - /Users/vinoctis/Work/docker-data/etcd/node3:/etcd-data
   mysql:
-    image: arm64v8/mysql:8.0 
-    container_name: mysql8
     env_file:
       - ./payment/.env
+    image: arm64v8/mysql:8.0 
+    container_name: mysql8
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_DATABASE: ${$MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_ROOT_PASSWORD: ${PAYMENT_PASSWORD}
+      MYSQL_DATABASE: ${PAYMENT_DATABASE}
     ports:
-      - 33060:${MYSQL_PORT}
+      - 33060:3306
     volumes:
       - /Users/vinoctis/Work/docker-data/mysql/:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p${PAYMENT_PASSWORD} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -98,8 +97,10 @@ services:
     build:
       context: ./payment
       dockerfile: Dockerfile
+    container_name: payment-service
+    image: local/payment-alpine:v1.0.2
     depends_on:
-      mysql8:
+      mysql:
         condition: service_healthy
       etcd-node1: 
         condition: service_healthy

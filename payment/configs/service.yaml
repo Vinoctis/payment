@@ -1,9 +1,9 @@
 services:
   http:
     name: payment-http
-    addr: localhost
+    addr: payment-service
     port: 8080
   grpc:
     name: payment-grpc
     port: 9090
-    addr: localhost
+    addr: payment-service
